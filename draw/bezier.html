@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>个人技术练习</title>
+    <style>
+        * {
+            padding: 0;
+            /*margin: 50;*/
+        }
+
+        .nav {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            margin: 10px;
+        }
+
+        .nav ul {
+            list-style: none;
+        }
+
+        .nav1 {
+            list-style: none;
+            width: 200px;
+            font-weight: bold;
+            background-color: #f38080;
+        }
+
+        .nav1 li {
+            line-height: 48px;
+            width: 200px;
+        }
+
+        .nav1:hover {
+            border: 1px solid #606060;
+        }
+
+        a {
+            display: block;
+            text-decoration: none;
+            color: #606060;
+        }
+
+        button {
+            /*background-color: #3bd567;*/
+            border: none;
+            color: white;
+            /*padding: 15px 32px;*/
+            /*text-align: center;*/
+            text-decoration: none;
+            /*display: inline-block;*/
+            /*font-size: 16px;*/
+            opacity: 0;
+        }
+
+        .nav a:hover {
+            color: #e8e7e3;
+        }
+
+        .nav ul li ul li a:hover {
+            margin-right: -50px;
+        }
+
+        .nav ul li ul li button:hover {
+            margin-right: -50px;
+        }
+
+        .nav2 {
+            position: absolute;
+            width: 200px;
+            display: none;
+            margin-top: -10px;
+            margin-left: 20px;
+            background-color: #85c3d7;
+            border: 1px solid #606060;
+        }
+
+        .nav ul li:hover {
+            background-color: #c9c9c9;
+            /*color: #d32424;*/
+        }
+
+        .nav1 li:hover .nav2, .nav2 li:hover .nav3, .nav2 li:hover {
+            display: block;
+        }
+
+        .nav3 {
+            position: absolute;
+            width: 200px;
+            left: 200px;
+            /* move up*/
+            margin-top: -38px;
+            margin-left: -10px;
+            display: none;
+            background-color: #3bd567;
+            border: 1px solid #606060;
+        }
+
+        .content {
+            position: relative;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="nav">
+    <ul class="nav1">
+        <li class="border1">
+            <a href="/index.html">Menu</a>
+            <ul class="nav2">
+                <li>
+                    <a href="/index.html">Draw</a>
+                    <ul class="nav3">
+                        <li><a href="/draw/bezier.html">Bezier</a></li>
+                        <li><a href="/draw/circle.html">Circle</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="/index.html">Crop</a>
+                    <ul class="nav3">
+                        <li><a href="/crop/convex.html">Convex</a></li>
+                        <li><a href="/crop/concave.html">Concave</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<div class="content">
+    
+
+<canvas id="canvas" height="500" width="1000" class="draw_bezier" style="cursor: default;"></canvas>
+
+<script>
+
+    let canvas, ctx, point, style, drag = null, dPoint;
+
+    // convert window coordinates to canvas coordinates
+    let windowToCanvas = (x, y) => {
+        let bbox = canvas.getBoundingClientRect();
+
+        return {
+            x: x - bbox.left * (canvas.width / bbox.width),
+            y: y - bbox.top * (canvas.height / bbox.height)
+        };
+    };
+
+    // define initial points
+    function Init() {
+
+        point = {
+            p1: {x: 100, y: 250},
+            p2: {x: 400, y: 250}
+        };
+
+        point.cp1 = {x: 150, y: 100};
+        point.cp2 = {x: 350, y: 100};
+
+        // default styles
+        style = {
+            curve: {width: 6, color: "#333"},
+            cpline: {width: 1, color: "#C00"},
+            point: {radius: 10, width: 2, color: "#900", fill: "rgba(200,200,200,0.5)", arc1: 0, arc2: 2 * Math.PI}
+        }
+
+        // line style defaults
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // event handlers
+        canvas.onmousedown = DragStart;
+        canvas.onmousemove = Dragging;
+        canvas.onmouseup = canvas.onmouseout = DragEnd;
+
+        DrawCanvas();
+    }
+
+
+    // draw canvas
+    function DrawCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // control lines
+        ctx.lineWidth = style.cpline.width;
+        ctx.strokeStyle = style.cpline.color;
+        ctx.beginPath();
+        ctx.moveTo(point.p1.x, point.p1.y);
+        ctx.lineTo(point.cp1.x, point.cp1.y);
+        if (point.cp2) {
+            ctx.moveTo(point.p2.x, point.p2.y);
+            ctx.lineTo(point.cp2.x, point.cp2.y);
+        } else {
+            ctx.lineTo(point.p2.x, point.p2.y);
+        }
+        ctx.stroke();
+
+        // curve
+        ctx.lineWidth = style.curve.width;
+        ctx.strokeStyle = style.curve.color;
+        ctx.beginPath();
+        ctx.moveTo(point.p1.x, point.p1.y);
+        bezierCurveTo(point.cp1.x, point.cp1.y, point.cp2.x, point.cp2.y, point.p2.x, point.p2.y);
+        ctx.stroke();
+
+        // control points
+        for (const p in point) {
+            ctx.lineWidth = style.point.width;
+            ctx.strokeStyle = style.point.color;
+            ctx.fillStyle = style.point.fill;
+            ctx.beginPath();
+            ctx.arc(point[p].x, point[p].y, style.point.radius, style.point.arc1, style.point.arc2, true);
+            ctx.fill();
+            ctx.stroke();
+        }
+
+    }
+
+    function bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y)
+    {
+
+        for (let i = 0; i < 1; i += 0.01) {
+            let x1 = (1 - i) * (1 - i) * (1 - i) * point.p1.x + 3 * (1 - i) * (1 - i) * i * cp1x + 3 * (1 - i) * i * i * cp2x + i * i * i * x;
+            let y1 = (1 - i) * (1 - i) * (1 - i) * point.p1.y + 3 * (1 - i) * (1 - i) * i * cp1y + 3 * (1 - i) * i * i * cp2y + i * i * i * y;
+            ctx.lineTo(x1, y1);
+        }
+    }
+
+    // start dragging
+    function DragStart(e) {
+        e = MousePos(e);
+        let dx, dy;
+        for (const p in point) {
+            dx = point[p].x - e.x;
+            dy = point[p].y - e.y;
+            if ((dx * dx) + (dy * dy) < style.point.radius * style.point.radius) {
+                drag = p;
+                dPoint = e;
+                canvas.style.cursor = "move";
+                return;
+            }
+        }
+    }
+
+    // dragging
+    function Dragging(e) {
+        if (drag) {
+            e = MousePos(e);
+            point[drag].x += e.x - dPoint.x;
+            point[drag].y += e.y - dPoint.y;
+            dPoint = e;
+            DrawCanvas();
+        }
+    }
+
+    // end dragging
+    function DragEnd() {
+        drag = null;
+        canvas.style.cursor = "default";
+        DrawCanvas();
+    }
+
+    // event parser
+    function MousePos(event) {
+        event = (event ? event : window.event);
+        return windowToCanvas(event.clientX, event.clientY);
+    }
+
+    // start
+    canvas = document.getElementById("canvas");
+    if (canvas.getContext) {
+        ctx = canvas.getContext("2d");
+        Init();
+    }
+
+</script>
+
+<style>
+
+    body {
+        background: #ddd;
+    }
+
+    #canvas {
+        background-color: white;
+        border: 2px solid black;
+    }
+</style>
+
+
+</div>
+
+<style>
+    footer a {
+        text-decoration: underline; /* 下划线样式 */
+        color: #0000FF; /* 超链接文本颜色 */
+    }
+</style>
+
+<footer style="background-color: #f5f5f5; text-align: center; padding: 10px;">
+    <p><a href="https://beian.miit.gov.cn/">津ICP备2023000246号</a></p>
+</footer>
+
+</body></html>

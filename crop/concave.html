@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>个人技术练习</title>
+    <style>
+        * {
+            padding: 0;
+            /*margin: 50;*/
+        }
+
+        .nav {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            margin: 10px;
+        }
+
+        .nav ul {
+            list-style: none;
+        }
+
+        .nav1 {
+            list-style: none;
+            width: 200px;
+            font-weight: bold;
+            background-color: #f38080;
+        }
+
+        .nav1 li {
+            line-height: 48px;
+            width: 200px;
+        }
+
+        .nav1:hover {
+            border: 1px solid #606060;
+        }
+
+        a {
+            display: block;
+            text-decoration: none;
+            color: #606060;
+        }
+
+        button {
+            /*background-color: #3bd567;*/
+            border: none;
+            color: white;
+            /*padding: 15px 32px;*/
+            /*text-align: center;*/
+            text-decoration: none;
+            /*display: inline-block;*/
+            /*font-size: 16px;*/
+            opacity: 0;
+        }
+
+        .nav a:hover {
+            color: #e8e7e3;
+        }
+
+        .nav ul li ul li a:hover {
+            margin-right: -50px;
+        }
+
+        .nav ul li ul li button:hover {
+            margin-right: -50px;
+        }
+
+        .nav2 {
+            position: absolute;
+            width: 200px;
+            display: none;
+            margin-top: -10px;
+            margin-left: 20px;
+            background-color: #85c3d7;
+            border: 1px solid #606060;
+        }
+
+        .nav ul li:hover {
+            background-color: #c9c9c9;
+            /*color: #d32424;*/
+        }
+
+        .nav1 li:hover .nav2, .nav2 li:hover .nav3, .nav2 li:hover {
+            display: block;
+        }
+
+        .nav3 {
+            position: absolute;
+            width: 200px;
+            left: 200px;
+            /* move up*/
+            margin-top: -38px;
+            margin-left: -10px;
+            display: none;
+            background-color: #3bd567;
+            border: 1px solid #606060;
+        }
+
+        .content {
+            position: relative;
+            z-index: 0;
+            width: 1000px;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+<div class="nav">
+    <ul class="nav1">
+        <li class="border1">
+            <a href="/index.html">Menu</a>
+            <ul class="nav2">
+                <li>
+                    <a href="/index.html">Draw</a>
+                    <ul class="nav3">
+                        <li><a href="/draw/bezier.html">Bezier</a></li>
+                        <li><a href="/draw/circle.html">Circle</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="/index.html">Crop</a>
+                    <ul class="nav3">
+                        <li><a href="/crop/convex.html">Convex</a></li>
+                        <li><a href="/crop/concave.html">Concave</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<div class="content">
+    
+
+<div id="draw">
+    <input type="button" id="clear_button" value="Clear">
+    <input type="button" id="switch_button" value="Currently drawing: Cropping Window">
+    <input type="button" id="crop_button" value="Crop">
+    <canvas id="canvas" height="500" width="1000" class="crop_concave"></canvas>
+</div>
+
+<script>
+
+    // Variables and basics ****************************************************************
+    function Point(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    let points = []; // an array to store the points of polygon
+    let cropping_window = []; // an array to store the points of cropping window
+    let current_drawing_shape = 0;  // variable to record the current drawing shape, 0 for window, 1 for polygon
+
+    // get the canvas element
+    const canvas = document.getElementById("canvas");  // changed from var to const
+
+    // get the context of the canvas
+    const ctx = canvas.getContext("2d");
+
+    canvas.addEventListener('click', mouse_click);
+    canvas.addEventListener('dblclick', on_double_click);
+
+    // Drawing ****************************************************************
+
+    function baseDrawPolygon(points_, color, dashed) {
+        // if there is no point in the array, then return
+        if (points_.length === 0) {
+            return;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(points_[0].x, points_[0].y);
+        for (let i = 1; i < points_.length; i++) {
+            ctx.lineTo(points_[i].x, points_[i].y);
+        }
+        ctx.closePath();
+
+        // set solid line
+        ctx.setLineDash(dashed);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+
+    // draw polygon
+    function drawPolygon(points_, x, y) {
+        let points__ = points_.slice();
+        if (x && y) {
+            points__.push(new Point(x, y));
+        }
+        baseDrawPolygon(points__, "#000000", []);
+    }
+
+    function drawCroppingWindow(cropping_window, x, y) {
+        let cropping_window_ = cropping_window.slice();
+        if (x && y) {
+            cropping_window_.push(new Point(x, y));
+        }
+        baseDrawPolygon(cropping_window_, "#3575e3", [5, 5]);
+    }
+
+    function mouse_click(e) {
+        // get mouse position relative to canvas
+        let rect = canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        canvas.addEventListener('mousemove', mousemove);
+
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (current_drawing_shape === 0) {
+            // add the point to the array
+            push_point(cropping_window, x, y);
+
+            drawPolygon(points);
+            drawCroppingWindow(cropping_window, x, y);
+        } else {
+            // add the point to the array
+            push_point(points, x, y);
+
+            drawPolygon(points, x, y);
+            drawCroppingWindow(cropping_window);
+        }
+
+    }
+
+    function push_point(points_, x, y) {
+        // add the point to the array
+        points_.push(new Point(x, y));
+    }
+
+    function on_double_click() {
+        // remove last point
+        if (current_drawing_shape === 0) {
+            cropping_window.pop();
+        } else {
+            points.pop();
+        }
+        canvas.removeEventListener('mousemove', mousemove); // remove the event listener
+        current_drawing_shape = 1 - current_drawing_shape; // switch the current drawing shape
+
+        // set value of button
+        switch_button.value = (current_drawing_shape === 0) ? "Currently drawing: Cropping Window" : "Currently drawing: Polygon";
+    }
+
+    function mousemove(e) {
+        let rect = canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (current_drawing_shape === 0) // window
+        {
+            drawPolygon(points);
+            drawCroppingWindow(cropping_window, x, y);
+        } else {
+            drawPolygon(points, x, y);
+            drawCroppingWindow(cropping_window);
+        }
+    }
+
+    // Cropping Algorithm ****************************************************************
+
+    let Node = function (ref_idx, point_type, in_or_out, x, y) {
+        this.point_type = point_type;  // e.g. "polygon" or "window" or "intersection"
+
+        this.ref_idx = ref_idx;  // referencing from C to D or from D to C, i.e. pointer, only used for intersection points
+        this.in_or_out = in_or_out;  // only for intersection
+        this.x = x;
+        this.y = y;
+
+        this.visited = false;
+    };
+
+    function traverse_queue(queue_id, queue_C, queue_D, begin_idx, result_queue, end_queue_id, end_idx)  // queue_id stands for queue_C or queue_D, 0 for C, 1 for D
+    {
+        let idx = begin_idx;
+        let queue = queue_id === 0 ? queue_C : queue_D;
+        for (let i = 0; i < queue.length; i++, idx = (idx + 1) % queue.length) {
+            // check for end
+            if (queue[idx].visited === true) {
+                return;
+            }
+            queue[idx].visited = true;
+            if (queue[idx].point_type === "intersection" && queue_id === 0 && queue[idx].in_or_out === "out")  // if currently traversing queueC(polygon) and is out
+            {
+                return traverse_queue(1, queue_C, queue_D, queue[idx].ref_idx, result_queue, end_queue_id, end_idx);  // alternate to traverse queueD(window)
+            } else if (queue[idx].point_type === "intersection" && queue_id === 1 && queue[idx].in_or_out === "in")  // if currently traversing queueD(window) and is in
+            {
+                return traverse_queue(0, queue_C, queue_D, queue[idx].ref_idx, result_queue, end_queue_id, end_idx); // alternate to traverse queueC(polygon)
+            } else {
+                result_queue.push(queue[idx]);
+            }
+        }
+    }
+
+
+    function Weiler_Atherton(polygon, clipping_window) {
+        let queue_A = polygon.slice();  // original polygon
+        let queue_B = clipping_window.slice();  // original clipping window
+
+        let queue_C = [];  // inserted polygon
+        let queue_D = [];  // inserted clipping
+
+        // find intersection points, insert intersection points and original points into queue_C and queue_D
+        for (let i = 0; i < queue_A.length; i++) // traverse polygon
+        {
+            queue_C.push(new Node(null, "polygon", "none", queue_A[i].x, queue_A[i].y));
+            let intersection_points = [];
+            for (let j = 0; j < queue_B.length; j++) // traverse cropping window
+            {
+                let intersection_point = Intersection(queue_A[i], queue_A[(i + 1) % queue_A.length], queue_B[j], queue_B[(j + 1) % queue_B.length]);
+                if (intersection_point) {
+                    const intersection_point_type = check_in_or_out(queue_B[j], queue_B[(j + 1) % queue_B.length], queue_A[i], queue_A[(i + 1) % queue_A.length]);
+                    intersection_points.push(new Node(null, "intersection", intersection_point_type, intersection_point.x, intersection_point.y));
+                }
+            }
+            // arrange intersection points in order
+            intersection_points.sort(function (a, b) {
+                return a.x - b.x;
+            });
+            let order_sign = queue_A[i].x - queue_A[(i + 1) % queue_A.length].x;
+            if (order_sign > 0) {
+                intersection_points.reverse();
+            }
+
+            // insert intersection points into queue_C
+            for (let j = 0; j < intersection_points.length; j++) {
+                queue_C.push(intersection_points[j]);
+            }
+        }
+        for (let i = 0; i < queue_B.length; i++) // traverse cropping window
+        {
+            queue_D.push(new Node(null, "window", "none", queue_B[i].x, queue_B[i].y));
+            let intersection_points = [];
+            for (let j = 0; j < queue_A.length; j++) // traverse polygon
+            {
+                let intersection_point = Intersection(queue_A[j], queue_A[(j + 1) % queue_A.length], queue_B[i], queue_B[(i + 1) % queue_B.length]);
+                if (intersection_point) {
+                    const intersection_point_type = check_in_or_out(queue_B[i], queue_B[(i + 1) % queue_B.length], queue_A[j], queue_A[(j + 1) % queue_A.length]);
+                    intersection_points.push(new Node(null, "intersection", intersection_point_type, intersection_point.x, intersection_point.y));
+                }
+            }
+            // arrange intersection points in order
+            intersection_points.sort(function (a, b) {
+                return a.x - b.x;
+            });
+            let order_sign = queue_B[i].x - queue_B[(i + 1) % queue_B.length].x;
+            if (order_sign > 0) {
+                intersection_points.reverse();
+            }
+
+            // insert intersection points into queue_D
+            for (let j = 0; j < intersection_points.length; j++) {
+                queue_D.push(intersection_points[j]);
+            }
+        }
+
+        // traverse queue_C and queue_D to update intersection points ref_idx
+        for (let i = 0; i < queue_C.length; i++) {
+            for (let j = 0; j < queue_D.length; j++) {
+                if (queue_C[i].point_type === "intersection" && queue_D[j].point_type === "intersection") {
+                    if (queue_C[i].x === queue_D[j].x && queue_C[i].y === queue_D[j].y) {
+                        queue_C[i].ref_idx = j;
+                        queue_D[j].ref_idx = i;
+                    }
+                }
+            }
+        }
+
+        // for each point in D, display the in_or_out via text
+        for (let i = 0; i < queue_D.length; i++) {
+            if (queue_D[i].point_type === "intersection") {
+                let text = queue_D[i].in_or_out === "in" ? "in" : "out";
+                let text_x = queue_D[i].x - 5;
+                let text_y = queue_D[i].y + 5;
+                // draw text
+                ctx.font = "20px Arial";
+                ctx.fillStyle = "cyan";
+                ctx.fillText(text, text_x, text_y);
+            }
+        }
+        // label index of queue_A
+        for (let i = 0; i < queue_A.length; i++) {
+            let text = i;
+            let text_x = queue_A[i].x + 10;
+            let text_y = queue_A[i].y + 10;
+            // draw text
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "black";
+            ctx.fillText(text, text_x, text_y);
+        }
+
+        // label index of queue_B
+        for (let i = 0; i < queue_B.length; i++) {
+            let text = i;
+            let text_x = queue_B[i].x + 10;
+            let text_y = queue_B[i].y + 10;
+            // draw text
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "blue";
+            ctx.fillText(text, text_x, text_y);
+        }
+
+        for (let i = 0; i < queue_C.length; i++) {
+            if (queue_C[i].point_type === "intersection" && queue_C[i].in_or_out === "in" && queue_C[i].visited === false) {
+                let result_queue = [];
+                traverse_queue(0, queue_C, queue_D, i, result_queue, 0, i);
+                // draw the cropped polygon
+                baseDrawPolygon(result_queue, "red", []);
+            }
+        }
+    }
+
+    /*求叉积*/
+    function Multi(p0, p1, p2) {
+        return (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+    }
+
+    /*求交点，利用正弦定理*/
+    function Intersection(start0, end0, start1, end1) {
+        const pX = (Multi(start0, end1, start1) * end0.x - Multi(end0, end1, start1) * start0.x) /
+            (Multi(start0, end1, start1) - Multi(end0, end1, start1));
+        const pY = (Multi(start0, end1, start1) * end0.y - Multi(end0, end1, start1) * start0.y) /
+            (Multi(start0, end1, start1) - Multi(end0, end1, start1));
+        // 判断交点是否在两条线段上
+        if (pX >= Math.min(start0.x, end0.x) && pX <= Math.max(start0.x, end0.x) &&
+            pX >= Math.min(start1.x, end1.x) && pX <= Math.max(start1.x, end1.x) &&
+            pY >= Math.min(start0.y, end0.y) && pY <= Math.max(start0.y, end0.y) &&
+            pY >= Math.min(start1.y, end1.y) && pY <= Math.max(start1.y, end1.y)) {
+            return new Point(pX, pY);
+        } else {
+            return null;
+        }
+    }
+
+    function check_in_or_out(window_vec_start, window_vec_end, polygon_vec_start, polygon_vec_end) {
+        // window_vec: window vector, clockwise
+        // polygon_vec: polygon vector, clockwise
+
+        // check if the intersection point is in point or out point using cross product
+        let cross_product = (window_vec_end.x - window_vec_start.x) * (polygon_vec_end.y - polygon_vec_start.y) - (polygon_vec_end.x - polygon_vec_start.x) * (window_vec_end.y - window_vec_start.y);
+        if (cross_product > 0) {
+            return "in";
+        } else {
+            return "out";
+        }
+    }
+
+
+    // Interactions ****************************************************************
+    const clear_button = document.getElementById('clear_button');
+    clear_button.onclick = function () {
+        //  clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // clear points
+        points = [];
+        cropping_window = [];
+    }
+
+    const switch_button = document.getElementById('switch_button');
+    switch_button.onclick = function () {
+        current_drawing_shape = 1 - current_drawing_shape;
+
+        // set value of button
+        switch_button.value = (current_drawing_shape === 0) ? "Currently drawing: Cropping Window" : "Currently drawing: Polygon";
+    }
+
+    function turn_into_clockwise(points) {
+        let points_copy = points.slice();
+        let sum = 0;
+        for (let i = 0; i < points_copy.length; i++) {
+            const start = points_copy[i];
+            const end = points_copy[(i + 1) % points_copy.length];
+            sum += (end.x - start.x) * (end.y + start.y);
+        }
+        if (sum > 0) {
+            points_copy.reverse();
+        }
+        return points_copy;
+    }
+
+    const crop_button = document.getElementById('crop_button');
+    crop_button.onclick = function () {
+        let cropping_window_clockwise = turn_into_clockwise(cropping_window);
+        let polygon_clockwise = turn_into_clockwise(points);
+        drawPolygon(polygon_clockwise);
+        drawCroppingWindow(cropping_window_clockwise);
+        Weiler_Atherton(polygon_clockwise, cropping_window_clockwise);
+    }
+
+
+</script>
+
+<style>
+    #canvas {
+        background-color: white;
+        border: 2px solid black;
+    }
+
+    #clear_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        font-size: 20px;
+    }
+
+    #switch_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 50px;
+        font-size: 20px;
+    }
+
+    #crop_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 90px;
+        font-size: 20px;
+    }
+
+    #draw {
+        position: absolute;
+        left: 20px;
+    }
+
+    body {
+        background: #ddd;
+    }
+</style>
+
+
+</div>
+
+<style>
+    footer a {
+        text-decoration: underline; /* 下划线样式 */
+        color: #0000FF; /* 超链接文本颜色 */
+    }
+</style>
+
+<footer style="background-color: #f5f5f5; text-align: center; padding: 10px;">
+    <p><a href="https://beian.miit.gov.cn/">津ICP备2023000246号</a></p>
+</footer>
+
+</body></html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>个人技术练习</title>
+    <style>
+        * {
+            padding: 0;
+            /*margin: 50;*/
+        }
+
+        .nav {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            margin: 10px;
+        }
+
+        .nav ul {
+            list-style: none;
+        }
+
+        .nav1 {
+            list-style: none;
+            width: 200px;
+            font-weight: bold;
+            background-color: #f38080;
+        }
+
+        .nav1 li {
+            line-height: 48px;
+            width: 200px;
+        }
+
+        .nav1:hover {
+            border: 1px solid #606060;
+        }
+
+        a {
+            display: block;
+            text-decoration: none;
+            color: #606060;
+        }
+
+        button {
+            /*background-color: #3bd567;*/
+            border: none;
+            color: white;
+            /*padding: 15px 32px;*/
+            /*text-align: center;*/
+            text-decoration: none;
+            /*display: inline-block;*/
+            /*font-size: 16px;*/
+            opacity: 0;
+        }
+
+        .nav a:hover {
+            color: #e8e7e3;
+        }
+
+        .nav ul li ul li a:hover {
+            margin-right: -50px;
+        }
+
+        .nav ul li ul li button:hover {
+            margin-right: -50px;
+        }
+
+        .nav2 {
+            position: absolute;
+            width: 200px;
+            display: none;
+            margin-top: -10px;
+            margin-left: 20px;
+            background-color: #85c3d7;
+            border: 1px solid #606060;
+        }
+
+        .nav ul li:hover {
+            background-color: #c9c9c9;
+            /*color: #d32424;*/
+        }
+
+        .nav1 li:hover .nav2, .nav2 li:hover .nav3, .nav2 li:hover {
+            display: block;
+        }
+
+        .nav3 {
+            position: absolute;
+            width: 200px;
+            left: 200px;
+            /* move up*/
+            margin-top: -38px;
+            margin-left: -10px;
+            display: none;
+            background-color: #3bd567;
+            border: 1px solid #606060;
+        }
+
+        .content {
+            position: relative;
+            z-index: 0;
+            width: 1000px;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <ul class="nav1">
+        <li class="border1">
+            <a href="/index.html">Menu</a>
+            <ul class="nav2">
+                <li>
+                    <a href="/index.html">Draw</a>
+                    <ul class="nav3">
+                        <li><a href="/draw/bezier.html">Bezier</a></li>
+                        <li><a href="/draw/circle.html">Circle</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="/index.html">Crop</a>
+                    <ul class="nav3">
+                        <li><a href="/crop/convex.html">Convex</a></li>
+                        <li><a href="/crop/concave.html">Concave</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<div class="content">
+    
+
+<div id="draw">
+    <div id="set_logic_resolution_div">
+        <label for="logic_resolution_x">logic resolution x: </label><input type="number" id="logic_resolution_x" value="100">
+        <label for="logic_resolution_y">logic resolution y: </label><input type="number" id="logic_resolution_y" value="50">
+        <input type="button" id="set_logic_resolution" value="Set Resolution">
+    </div>
+    <input type="button" id="clear_button" value="Clear">
+    <canvas id="canvas" height="500" width="1000" class="draw_circle"></canvas>
+</div>
+
+<script>
+
+    // Variables and basics ****************************************************************
+
+    // get the canvas element
+    const canvas = document.getElementById("canvas");  // changed from var to const
+
+    // get the context of the canvas
+    const ctx = canvas.getContext("2d");
+
+    let logic_resolution = {
+        x: document.getElementById("logic_resolution_x").value,
+        y: document.getElementById("logic_resolution_y").value
+    };
+
+    let UNIT = {
+        "w": canvas.width / logic_resolution.x,
+        "h": canvas.height / logic_resolution.y
+    };
+
+    let center = {
+        x: null,
+        y: null
+    };
+
+    let radius = null;
+
+
+    function draw_pixel(logic_x, logic_y, color) // notice that origin start from top left, origin is (0, 0)\
+    {
+        let canvas_coord = logicToCanvas(logic_x, logic_y);
+        ctx.fillStyle = color;
+        ctx.fillRect(canvas_coord.x, canvas_coord.y, UNIT.w, UNIT.h);
+    }
+
+    function draw_grid() {
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 0.1;
+        for (let i = 0; i < logic_resolution.x; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * UNIT.w, 0);
+            ctx.lineTo(i * UNIT.w, canvas.height);
+            ctx.stroke();
+        }
+        for (let i = 0; i < logic_resolution.y; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, i * UNIT.h);
+            ctx.lineTo(canvas.width, i * UNIT.h);
+            ctx.stroke();
+        }
+    }
+
+    canvas.addEventListener('mousemove', mousemove);
+    canvas.addEventListener('click', mouse_click);
+    draw_grid();
+
+    // Drawing ****************************************************************
+
+    // convert window coordinates to canvas coordinates
+    let windowToCanvas = (x, y) => {
+        let bbox = canvas.getBoundingClientRect();
+
+        return {
+            x: x - bbox.left * (canvas.width / bbox.width),
+            y: y - bbox.top * (canvas.height / bbox.height)
+        };
+    };
+
+    let logicToCanvas = (logic_x, logic_y) => {
+        return {
+            x: logic_x * UNIT.w,
+            y: logic_y * UNIT.h
+        };
+    };
+
+    let canvasToLogic = (canvas_x, canvas_y) => {
+        return {
+            x: Math.floor(canvas_x / UNIT.w),
+            y: Math.floor(canvas_y / UNIT.h)
+        };
+    };
+
+    function mouse_click(e) {
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // get mouse position relative to canvas
+        let canvas_pos = windowToCanvas(e.clientX, e.clientY);
+        let logic_pos = canvasToLogic(canvas_pos.x, canvas_pos.y);
+
+        if (center.x === null && center.y === null)  // set center
+        {
+            center.x = logic_pos.x;
+            center.y = logic_pos.y;
+
+        } else {
+            radius = Math.floor(Math.sqrt(Math.pow(logic_pos.x - center.x, 2) + Math.pow(logic_pos.y - center.y, 2)) + 0.5);
+            canvas.removeEventListener('mousemove', mousemove);
+        }
+        draw_grid();
+        draw_circle(center.x, center.y, radius);
+    }
+
+    function mousemove(e) {
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let canvas_pos = windowToCanvas(e.clientX, e.clientY);
+        if (center.x !== null && center.y !== null)  // center is set, then draw radius
+        {
+            let logic_pos = canvasToLogic(canvas_pos.x, canvas_pos.y);
+            radius = Math.floor(Math.sqrt(Math.pow(logic_pos.x - center.x, 2) + Math.pow(logic_pos.y - center.y, 2)) + 0.5);
+            draw_circle(center.x, center.y, radius);
+        } else {
+            let logic_pos = canvasToLogic(canvas_pos.x, canvas_pos.y);
+            draw_pixel(logic_pos.x, logic_pos.y, "red");
+        }
+        draw_grid();
+    }
+
+    function draw_circle(xc, yc, r) {
+        draw_pixel(xc, yc, "red");
+
+        let x = 0;
+        let y = r;
+        let d = 3 - 2 * r;
+        // let d = 1.25 - r;
+        while (x <= y) {
+            draw_pixel(xc + x, yc + y, "black");
+            draw_pixel(xc - x, yc + y, "black");
+            draw_pixel(xc + x, yc - y, "black");
+            draw_pixel(xc - x, yc - y, "black");
+            draw_pixel(xc + y, yc + x, "black");
+            draw_pixel(xc - y, yc + x, "black");
+            draw_pixel(xc + y, yc - x, "black");
+            draw_pixel(xc - y, yc - x, "black");
+            if (d < 0) {
+                d = d + 4 * x + 6;
+                // d = d + 2 * x + 3;
+            } else {
+                d = d + 4 * (x - y) + 10;
+                // d = d + 2 * (x - y) + 5;
+                y--;
+            }
+            x++;
+        }
+    }
+
+
+    // Interactions ****************************************************************
+    const clear_button = document.getElementById('clear_button');
+    clear_button.onclick = function () {
+        center.x = null;
+        center.y = null;
+        radius = null;
+        canvas.addEventListener('mousemove', mousemove);
+        //  clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        draw_grid();
+    }
+
+    const set_logic_resolution_button = document.getElementById('set_logic_resolution');
+    set_logic_resolution_button.onclick = function () {
+        logic_resolution = {
+            x: document.getElementById("logic_resolution_x").value,
+            y: document.getElementById("logic_resolution_y").value
+        };
+
+        UNIT = {
+            "w": canvas.width / logic_resolution.x,
+            "h": canvas.height / logic_resolution.y
+        };
+
+        // clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        draw_grid();
+    }
+
+
+</script>
+
+<style>
+    #canvas {
+        background-color: white;
+        border: 2px solid black;
+    }
+
+    #clear_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 50px;
+        font-size: 20px;
+    }
+
+    #set_logic_resolution_div {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        font-size: 20px;
+    }
+
+    #logic_resolution_x {
+        z-index: 10;
+        font-size: 20px;
+        width: 50px;
+        height: 30px;
+    }
+
+    #logic_resolution_y {
+        z-index: 10;
+        font-size: 20px;
+        width: 50px;
+        height: 30px;
+    }
+
+    #set_logic_resolution {
+        z-index: 10;
+        font-size: 20px;
+        height: 37px;
+    }
+
+    #draw {
+        position: absolute;
+        left: 20px;
+    }
+
+    body {
+        background: #ddd;
+    }
+
+</style>
+
+
+</div>
+
+<style>
+    footer a {
+        text-decoration: underline; /* 下划线样式 */
+        color: #0000FF; /* 超链接文本颜色 */
+    }
+</style>
+
+<footer style="background-color: #f5f5f5; text-align: center; padding: 10px;">
+    <p><a href="https://beian.miit.gov.cn/">津ICP备2023000246号</a></p>
+</footer>
+
+</body></html>

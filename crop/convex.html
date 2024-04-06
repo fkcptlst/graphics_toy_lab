@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>个人技术练习</title>
+    <style>
+        * {
+            padding: 0;
+            /*margin: 50;*/
+        }
+
+        .nav {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            margin: 10px;
+        }
+
+        .nav ul {
+            list-style: none;
+        }
+
+        .nav1 {
+            list-style: none;
+            width: 200px;
+            font-weight: bold;
+            background-color: #f38080;
+        }
+
+        .nav1 li {
+            line-height: 48px;
+            width: 200px;
+        }
+
+        .nav1:hover {
+            border: 1px solid #606060;
+        }
+
+        a {
+            display: block;
+            text-decoration: none;
+            color: #606060;
+        }
+
+        button {
+            /*background-color: #3bd567;*/
+            border: none;
+            color: white;
+            /*padding: 15px 32px;*/
+            /*text-align: center;*/
+            text-decoration: none;
+            /*display: inline-block;*/
+            /*font-size: 16px;*/
+            opacity: 0;
+        }
+
+        .nav a:hover {
+            color: #e8e7e3;
+        }
+
+        .nav ul li ul li a:hover {
+            margin-right: -50px;
+        }
+
+        .nav ul li ul li button:hover {
+            margin-right: -50px;
+        }
+
+        .nav2 {
+            position: absolute;
+            width: 200px;
+            display: none;
+            margin-top: -10px;
+            margin-left: 20px;
+            background-color: #85c3d7;
+            border: 1px solid #606060;
+        }
+
+        .nav ul li:hover {
+            background-color: #c9c9c9;
+            /*color: #d32424;*/
+        }
+
+        .nav1 li:hover .nav2, .nav2 li:hover .nav3, .nav2 li:hover {
+            display: block;
+        }
+
+        .nav3 {
+            position: absolute;
+            width: 200px;
+            left: 200px;
+            /* move up*/
+            margin-top: -38px;
+            margin-left: -10px;
+            display: none;
+            background-color: #3bd567;
+            border: 1px solid #606060;
+        }
+
+        .content {
+            position: relative;
+            z-index: 0;
+            width: 1000px;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+<div class="nav">
+    <ul class="nav1">
+        <li class="border1">
+            <a href="/index.html">Menu</a>
+            <ul class="nav2">
+                <li>
+                    <a href="/index.html">Draw</a>
+                    <ul class="nav3">
+                        <li><a href="/draw/bezier.html">Bezier</a></li>
+                        <li><a href="/draw/circle.html">Circle</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="/index.html">Crop</a>
+                    <ul class="nav3">
+                        <li><a href="/crop/convex.html">Convex</a></li>
+                        <li><a href="/crop/concave.html">Concave</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<div class="content">
+    
+
+<div id="draw">
+    <input type="button" id="clear_button" value="Clear">
+    <input type="button" id="switch_button" value="Currently drawing: Cropping Window">
+    <input type="button" id="crop_button" value="Crop">
+    <canvas id="canvas" height="500" width="1000" class="crop_convex"></canvas>
+</div>
+
+<script>
+    // Variables and basics ****************************************************************
+    function Point(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    function Edge(start, end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    let points = []; // an array to store the points of polygon
+    let cropping_window = []; // an array to store the points of cropping window
+    let current_drawing_shape = 0;  // variable to record the current drawing shape, 0 for window, 1 for polygon
+
+    // get the canvas element
+    const canvas = document.getElementById("canvas");  // changed from var to const
+
+    // get the context of the canvas
+    const ctx = canvas.getContext("2d");
+
+
+    canvas.addEventListener('click', mouse_click);
+    canvas.addEventListener('dblclick', on_double_click);
+
+    // Drawing ****************************************************************
+
+    function baseDrawPolygon(points_, color, dashed) {
+        // if there is no point in the array, then return
+        if (points_.length === 0) {
+            return;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(points_[0].x, points_[0].y);
+        for (let i = 1; i < points_.length; i++) {
+            ctx.lineTo(points_[i].x, points_[i].y);
+        }
+        ctx.closePath();
+
+        // set solid line
+        ctx.setLineDash(dashed);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+
+    // draw polygon
+    function drawPolygon(points_, x, y) {
+        // console.log("drawPolygon called");
+        let points__ = points_.slice();
+        if (x && y) {
+            points__.push(new Point(x, y));
+        }
+        baseDrawPolygon(points__, "#000000", []);
+    }
+
+    function drawCroppingWindow(cropping_window, x, y) {
+        // console.log("drawCroppingWindow called");
+        let cropping_window_ = cropping_window.slice();
+        if (x && y) {
+            cropping_window_.push(new Point(x, y));
+        }
+        baseDrawPolygon(cropping_window_, "#3575e3", [5, 5]);
+    }
+
+
+    // convert window coordinates to canvas coordinates
+    let windowToCanvas = (x, y) => {
+        let bbox = canvas.getBoundingClientRect();
+
+        return {
+            x: x - bbox.left * (canvas.width / bbox.width),
+            y: y - bbox.top * (canvas.height / bbox.height)
+        };
+    };
+
+
+    function mouse_click(e) {
+        let {x, y} = windowToCanvas(e.clientX, e.clientY);
+
+        canvas.addEventListener('mousemove', mousemove);
+
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (current_drawing_shape === 0) {
+            console.log("drawing window");
+            // add the point to the array
+            push_point(cropping_window, x, y);
+
+            drawPolygon(points);
+            drawCroppingWindow(cropping_window, x, y);
+        } else {
+            console.log("drawing polygon");
+            // add the point to the array
+            push_point(points, x, y);
+
+            drawPolygon(points, x, y);
+            drawCroppingWindow(cropping_window);
+        }
+
+    }
+
+    function push_point(points_, x, y) {
+        // add the point to the array
+        points_.push(new Point(x, y));
+    }
+
+    function on_double_click() {
+        // remove last point
+        if (current_drawing_shape === 0) {
+            cropping_window.pop();
+        } else {
+            points.pop();
+        }
+        canvas.removeEventListener('mousemove', mousemove); // remove the event listener
+        current_drawing_shape = 1 - current_drawing_shape; // switch the current drawing shape
+
+        // set value of button
+        switch_button.value = (current_drawing_shape === 0) ? "Currently drawing: Cropping Window" : "Currently drawing: Polygon";
+    }
+
+    function mousemove(e) {
+        let {x, y} = windowToCanvas(e.clientX, e.clientY);
+
+        // clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (current_drawing_shape === 0) // window
+        {
+            drawPolygon(points);
+            drawCroppingWindow(cropping_window, x, y);
+        } else {
+            drawPolygon(points, x, y);
+            drawCroppingWindow(cropping_window);
+        }
+    }
+
+    // Cropping Algorithm ****************************************************************
+    function Sutherland_Hodgman(polygon, clipEdges) {
+        let i;
+        let result = [], cur = [], flag, S = polygon[polygon.length - 1];
+        for (i in polygon) {
+            result.push(polygon[i]);
+        }
+        for (i in clipEdges) {
+            S = result[result.length - 1];
+            flag = !isInside(S, clipEdges[i]); /*flag = false表示在内侧，flag = true表示在外侧*/
+            for (let j in result) {
+                /*证明其在当前vector的内侧*/
+                if (isInside(result[j], clipEdges[i])) {
+                    /*如果前一个点在vector的外侧，那么将他们的交点加入到结果集中*/
+                    if (flag) {
+                        flag = false;
+                        cur.push(Intersection(S, result[j], clipEdges[i].start, clipEdges[i].end));
+                    }
+                    cur.push(result[j]);
+                } else {
+                    /*前一个点在外侧吗？，如果是求交点，加入结果集*/
+                    if (!flag) {
+                        flag = true;
+                        cur.push(Intersection(S, result[j], clipEdges[i].start, clipEdges[i].end));
+                    }
+                }
+                S = result[j]; // 更新首次比较的节点
+            }
+            result = [];
+            for (i in cur) {
+                result.push(cur[i]);
+            }
+            cur = [];
+        }
+        return result;
+    }
+
+    /*判断一个点是否在边的内侧，边的顺序是按逆时针算的，所以可以分辨出内外*/
+    function isInside(point, vector) {
+        console.log("isInside:", point, vector);
+        return Multi(point, vector.start, vector.end) >= 0;
+    }
+
+    /*求叉积*/
+    function Multi(p0, p1, p2) {
+        return (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+    }
+
+    /*求交点，利用正弦定理*/
+    function Intersection(start0, end0, start1, end1) {
+        const pX = (Multi(start0, end1, start1) * end0.x - Multi(end0, end1, start1) * start0.x) /
+            (Multi(start0, end1, start1) - Multi(end0, end1, start1));
+        const pY = (Multi(start0, end1, start1) * end0.y - Multi(end0, end1, start1) * start0.y) /
+            (Multi(start0, end1, start1) - Multi(end0, end1, start1));
+        return new Point(pX, pY);
+    }
+
+    function adjust_cropping_window(_window) {
+        let window = _window.slice();
+        let is_clockwise = true;
+        // make sure it is convex
+        for (let i = 0; i < window.length; i++) {
+            const start = window[i];
+            const end = window[(i + 1) % window.length];
+            const next = window[(i + 2) % window.length];
+            if (Multi(start, end, next) < 0) {
+                is_clockwise = false;
+                break;
+            }
+        }
+        if (!is_clockwise) {
+            window.reverse();
+        }
+        for (let i = 0; i < window.length; i++) {
+            const start = window[i];
+            const end = window[(i + 1) % window.length];
+            const next = window[(i + 2) % window.length];
+            if (Multi(start, end, next) < 0) {
+                console.log("not convex");
+                return false;
+            }
+        }
+        return window;
+    }
+
+    function get_cropping_window_edge(cropping_window) {
+        const edge_list = [];
+        // console.log("length: " + cropping_window.length);
+        for (let i = 0; i < cropping_window.length; i++) {
+            const start = cropping_window[i];
+            const end = cropping_window[(i + 1) % cropping_window.length];
+            edge_list.push(new Edge(start, end));
+        }
+        return edge_list;
+    }
+
+
+    // Interactions ****************************************************************
+    const clear_button = document.getElementById('clear_button');
+    clear_button.onclick = function () {
+        //  clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // clear points
+        points = [];
+        cropping_window = [];
+    }
+
+    const switch_button = document.getElementById('switch_button');
+    switch_button.onclick = function () {
+        console.log("switch");
+        current_drawing_shape = 1 - current_drawing_shape;
+
+        // set value of button
+        switch_button.value = (current_drawing_shape === 0) ? "Currently drawing: Cropping Window" : "Currently drawing: Polygon";
+    }
+
+    const crop_button = document.getElementById('crop_button');
+    crop_button.onclick = function () {
+        // readjust the cropping window, so that it is always clockwise and convex
+
+        const adjusted_cropping_window = adjust_cropping_window(cropping_window);
+        if (adjusted_cropping_window === false) {
+            alert("Cropping window must be convex!");
+            // clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // clear points
+            points = [];
+            cropping_window = [];
+            return;
+        }
+        const edge_list = get_cropping_window_edge(adjusted_cropping_window);
+        console.log("edge_list", edge_list);
+        console.log("points", points);
+
+        let res = Sutherland_Hodgman(points, edge_list);
+        console.log("res", res);
+        drawPolygon(points);
+        drawCroppingWindow(cropping_window);
+        baseDrawPolygon(res, "#ff0000", []);
+    }
+</script>
+
+<style>
+    #canvas {
+        background-color: white;
+        border: 2px solid black;
+    }
+
+    #clear_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        font-size: 20px;
+    }
+
+    #switch_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 50px;
+        font-size: 20px;
+    }
+
+    #crop_button {
+        z-index: 10;
+        position: absolute;
+        left: 10px;
+        top: 90px;
+        font-size: 20px;
+    }
+
+    #draw {
+        position: absolute;
+        left: 20px;
+    }
+
+    body {
+        background: #ddd;
+    }
+</style>
+
+
+</div>
+
+<style>
+    footer a {
+        text-decoration: underline; /* 下划线样式 */
+        color: #0000FF; /* 超链接文本颜色 */
+    }
+</style>
+
+<footer style="background-color: #f5f5f5; text-align: center; padding: 10px;">
+    <p><a href="https://beian.miit.gov.cn/">津ICP备2023000246号</a></p>
+</footer>
+
+</body></html>
